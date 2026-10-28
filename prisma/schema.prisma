@@ -1,0 +1,96 @@
+// TPRD 01 §4 — Database schema. Models are camelCase; API DTOs (snake_case) are
+// produced only in *.mapper.ts files.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  invited
+  active
+  inactive
+  suspended
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  permissions String[] // e.g. ["users.read","users.invite"]
+  isSystem    Boolean  @default(false)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id            String         @id @default(uuid())
+  firstName     String
+  lastName      String
+  email         String         @unique // always stored lower-case
+  passwordHash  String?
+  departmentId  String
+  roleId        String
+  status        UserStatus     @default(invited)
+  avatarUrl     String?
+  lastLoginAt   DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  department    Department     @relation(fields: [departmentId], references: [id])
+  role          Role           @relation(fields: [roleId], references: [id])
+  invitations   Invitation[]
+  refreshTokens RefreshToken[]
+
+  @@index([status])
+  @@index([departmentId])
+  @@index([roleId])
+  @@index([lastLoginAt])
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  userId      String
+  tokenHash   String    @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  action       String // user.invited | user.activated | user.updated | user.status_changed | user.deleted | auth.login
+  targetUserId String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([targetUserId])
+  @@index([createdAt])
+}

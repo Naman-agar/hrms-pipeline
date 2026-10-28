@@ -4,7 +4,7 @@ This repository is the backend for the HRMS User-management screen. It is built 
 
 | # | TPRD | Status |
 | --- | --- | --- |
-| 01 | docs/tprd/01-foundation.md | pending |
+| 01 | docs/tprd/01-foundation.md | done |
 | 02 | docs/tprd/02-authentication.md | pending |
 | 03 | docs/tprd/03-user-management.md | pending |
 | 04 | docs/tprd/04-user-invite.md | pending |
