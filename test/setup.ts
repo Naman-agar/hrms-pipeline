@@ -4,9 +4,10 @@
 // Order mirrors the skill's example: reset the DB, seed it, then boot the real
 // Nest app on top of the now-seeded data.
 //
-// TPRD 01 has no `login()` yet (that is 02-authentication) — tests that need an
-// authenticated caller build a supertest agent with the temporary `x-user-id`
-// header the §7 `AuthGuard` stub reads, using `asUser(id)` below.
+// Until 02-authentication's `POST /auth/login` lands, tests that need an
+// authenticated caller build a supertest agent carrying a real RS256 access
+// token minted straight from `JwtTokenService` (02 §2) via `asUser(id)` below —
+// the global `JwtAuthGuard` (02 §4.1) verifies it exactly like a login-issued one.
 import 'reflect-metadata';
 import { execSync } from 'node:child_process';
 import { INestApplication } from '@nestjs/common';
@@ -18,8 +19,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { JwtTokenService } from '../src/auth/jwt-token.service';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
-import { USER_ID_HEADER } from '../src/common/guards/auth.guard';
 
 export const GLOBAL_PREFIX = 'api/v1';
 
@@ -99,11 +100,28 @@ export async function getUserId(email: string): Promise<string> {
 }
 
 /**
- * A supertest agent that sends `x-user-id: <id>` on every request — the §7
- * temporary auth stub. Stands in for 02-authentication's `as(user)` helper.
+ * `Authorization` header value for `userId`: a real access token (02 §2 claims
+ * `{ sub, role, perms }`) signed by the booted app's `JwtTokenService`, so it
+ * passes `JwtAuthGuard` exactly like a login-issued one. Role/perms are read
+ * live from the DB at mint time, mirroring what 02 §3.1 step 8 would embed.
  */
-export function asUser(userId: string): ReturnType<typeof request.agent> {
-  return request.agent(app.getHttpServer()).set(USER_ID_HEADER, userId);
+export async function bearerFor(userId: string): Promise<string> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: { role: true },
+  });
+  const token = app
+    .get(JwtTokenService)
+    .sign({ sub: user.id, role: user.role.name, perms: user.role.permissions });
+  return `Bearer ${token}`;
+}
+
+/**
+ * A supertest agent that sends `Authorization: Bearer <jwt>` for `userId` on
+ * every request. Stands in for 02-authentication's `as(user)` helper.
+ */
+export async function asUser(userId: string): Promise<ReturnType<typeof request.agent>> {
+  return request.agent(app.getHttpServer()).set('Authorization', await bearerFor(userId));
 }
 
 /** Poll `predicate` until it returns true or `timeoutMs` elapses (for real async queue processing, not business-rule timing — no fake Clock applies to BullMQ/Redis). */

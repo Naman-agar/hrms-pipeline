@@ -15,13 +15,13 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { HealthModule } from '../src/health/health.module';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
-import { USER_ID_HEADER } from '../src/common/guards/auth.guard';
 import { MailService, MAIL_JOB_OPTIONS } from '../src/mail/mail.service';
 import { MAIL_PROVIDER } from '../src/mail/providers/mail-provider.interface';
 import { ConsoleMailProvider } from '../src/mail/providers/console.provider';
 import {
   app,
   asUser,
+  bearerFor,
   GLOBAL_PREFIX,
   getUserId,
   prisma,
@@ -163,7 +163,7 @@ describe('AC-F4 Reference data', () => {
   });
 
   it('AC-F4 GET /roles returns the seeded roles sorted by name, with permissions not exposed', async () => {
-    const res = await asUser(ashaId).get(API('/roles'));
+    const res = await (await asUser(ashaId)).get(API('/roles'));
     expect(res.status).toBe(200);
     expect(res.body.map((r: { name: string }) => r.name)).toEqual([
       'Employee',
@@ -177,7 +177,7 @@ describe('AC-F4 Reference data', () => {
   });
 
   it('AC-F4 GET /departments returns the seeded departments sorted by name', async () => {
-    const res = await asUser(ashaId).get(API('/departments'));
+    const res = await (await asUser(ashaId)).get(API('/departments'));
     expect(res.status).toBe(200);
     expect(res.body.map((d: { name: string }) => d.name)).toEqual([
       'Engineering',
@@ -189,13 +189,13 @@ describe('AC-F4 Reference data', () => {
   });
 
   it('AC-F4 an HR Admin POSTing /departments {name:"Finance"} gets 201', async () => {
-    const res = await asUser(ashaId).post(API('/departments')).send({ name: 'Finance' });
+    const res = await (await asUser(ashaId)).post(API('/departments')).send({ name: 'Finance' });
     expect(res.status).toBe(201);
     expect(res.body.name).toBe('Finance');
   });
 
   it('AC-F4 posting the same department name again returns 409 NAME_TAKEN', async () => {
-    const res = await asUser(ashaId).post(API('/departments')).send({ name: 'Finance' });
+    const res = await (await asUser(ashaId)).post(API('/departments')).send({ name: 'Finance' });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('NAME_TAKEN');
   });
@@ -204,7 +204,7 @@ describe('AC-F4 Reference data', () => {
     const humanResources = await prisma.department.findUniqueOrThrow({
       where: { name: 'Human Resources' },
     });
-    const res = await asUser(ashaId).delete(API(`/departments/${humanResources.id}`));
+    const res = await (await asUser(ashaId)).delete(API(`/departments/${humanResources.id}`));
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('IN_USE');
   });
@@ -227,7 +227,7 @@ describe('AC-F4 Reference data', () => {
       },
     });
     try {
-      const res = await asUser(ashaId).delete(API(`/departments/${archive.id}`));
+      const res = await (await asUser(ashaId)).delete(API(`/departments/${archive.id}`));
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('IN_USE');
       expect(res.body.error).not.toHaveProperty('stack');
@@ -239,14 +239,16 @@ describe('AC-F4 Reference data', () => {
 
   it('AC-F4 deleting a system role returns 409 SYSTEM_ROLE', async () => {
     const hrAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'HR Admin' } });
-    const res = await asUser(ashaId).delete(API(`/roles/${hrAdminRole.id}`));
+    const res = await (await asUser(ashaId)).delete(API(`/roles/${hrAdminRole.id}`));
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('SYSTEM_ROLE');
   });
 
   it('AC-F4 renaming a system role returns 409 SYSTEM_ROLE', async () => {
     const employeeRole = await prisma.role.findUniqueOrThrow({ where: { name: 'Employee' } });
-    const res = await asUser(ashaId)
+    const res = await (
+      await asUser(ashaId)
+    )
       .patch(API(`/roles/${employeeRole.id}`))
       .send({ name: 'Renamed Employee' });
     expect(res.status).toBe(409);
@@ -256,7 +258,7 @@ describe('AC-F4 Reference data', () => {
   it('AC-F4 a role-less employee (Rahul) still receives the seeded reference data on GET /roles', async () => {
     // "Given an authenticated user of any role" — Rahul (Employee, permissions: [])
     // has no @Permissions() requirement on GET /roles, only AuthGuard applies.
-    const res = await asUser(rahulId).get(API('/roles'));
+    const res = await (await asUser(rahulId)).get(API('/roles'));
     expect(res.status).toBe(200);
     expect(res.body.map((r: { name: string }) => r.name)).toEqual([
       'Employee',
@@ -285,7 +287,11 @@ describe('AC-F5 Error envelope', () => {
 
   it('AC-F5 a 403 (role-less employee on a departments.manage route) is { error: { code, message } } with no stack trace', async () => {
     const rahulId = await getUserId('rahul.shah@example.com');
-    const res = await asUser(rahulId).post(API('/departments')).send({ name: 'Should Not Exist' });
+    const res = await (
+      await asUser(rahulId)
+    )
+      .post(API('/departments'))
+      .send({ name: 'Should Not Exist' });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe('FORBIDDEN');
     expect(res.body.error).not.toHaveProperty('stack');
@@ -293,7 +299,7 @@ describe('AC-F5 Error envelope', () => {
 
   it('AC-F5 invalid input returns 400 VALIDATION_ERROR with a fields object naming each bad field', async () => {
     const ashaId = await getUserId('asha.mehta@example.com');
-    const res = await asUser(ashaId).post(API('/departments')).send({});
+    const res = await (await asUser(ashaId)).post(API('/departments')).send({});
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
     expect(res.body.error.fields).toHaveProperty('name');
@@ -302,8 +308,9 @@ describe('AC-F5 Error envelope', () => {
 
   it('AC-F5 a 500 (uncaught exception) is { error: { code: "INTERNAL" } }, message hidden, no stack trace', async () => {
     // Fault injection without touching `src/`: build a second, independent
-    // copy of the real app and monkeypatch the one Prisma call `AuthGuard`
-    // makes so an unplanned error reaches the global filter — exactly the
+    // copy of the real app and monkeypatch the one Prisma call `GET /roles`
+    // makes (`role.findMany`; the 02 §4.1 `JwtAuthGuard` itself never touches
+    // the DB) so an unplanned error reaches the global filter — exactly the
     // "anything else → 500 INTERNAL, message hidden" path of §6.1, which no
     // currently-wired endpoint can be made to hit through valid HTTP input
     // alone (every realistic failure in roles/departments is already mapped
@@ -317,17 +324,19 @@ describe('AC-F5 Error envelope', () => {
     await faultyApp.init();
 
     const prismaInFaultyApp = faultyApp.get(PrismaService);
-    const original = prismaInFaultyApp.user.findFirst;
+    const original = prismaInFaultyApp.role.findMany;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prismaInFaultyApp.user as any).findFirst = () => {
+    (prismaInFaultyApp.role as any).findMany = () => {
       throw new Error('boom: injected failure, must never reach the client');
     };
 
     try {
       const ashaId = await getUserId('asha.mehta@example.com');
+      // The bearer is minted by the shared app's JwtTokenService; both apps load
+      // the same JWT_PUBLIC_KEY from config, so the faulty app verifies it too.
       const res = await request(faultyApp.getHttpServer())
         .get(API('/roles'))
-        .set(USER_ID_HEADER, ashaId);
+        .set('Authorization', await bearerFor(ashaId));
       expect(res.status).toBe(500);
       expect(res.body.error.code).toBe('INTERNAL');
       expect(res.body.error.message).not.toMatch(/boom/);
@@ -335,7 +344,7 @@ describe('AC-F5 Error envelope', () => {
       expect(JSON.stringify(res.body)).not.toContain('boom');
     } finally {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (prismaInFaultyApp.user as any).findFirst = original;
+      (prismaInFaultyApp.role as any).findMany = original;
       await faultyApp.close();
     }
   });

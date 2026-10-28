@@ -6,14 +6,18 @@
 //     `PinoLogger` are in the DI graph: `main.ts` does
 //     `app.useGlobalFilters(new HttpExceptionFilter(app.get(Logger)))` (§6.5
 //     step 5) and `app.useLogger(app.get(Logger))`.
-//   - `ConfigModule` / `PrismaModule` — both `@Global()`, imported once here.
+//   - `ConfigModule` / `PrismaModule` / `ClockModule` — all `@Global()`, imported once here.
 //   - `AuditModule`, `MailModule` (owns `BullModule.forRootAsync` + the `mail`
 //     queue — do not call `BullModule.forRoot*` again), `RolesModule`,
 //     `DepartmentsModule`, `HealthModule`.
-//   - Global guards via `APP_GUARD` (§7): `AuthGuard` first, then
+//   - Global guards via `APP_GUARD` (02 §4): `JwtAuthGuard` first, then
 //     `PermissionsGuard`. Nest runs multiple `APP_GUARD` providers in
 //     registration order, and `PermissionsGuard` reads `request.user`, which
-//     `AuthGuard` attaches — so this order is load-bearing.
+//     `JwtAuthGuard` attaches — so this order is load-bearing.
+//   - `AuthModule` (02) — owns and exports `JwtTokenService`, which the
+//     `APP_GUARD` `JwtAuthGuard` below injects. An `APP_GUARD` is instantiated
+//     in this module's context, so the dependency must be visible here; it is,
+//     through the import, exactly like `PrismaService` reaches the other guards.
 //
 // What is deliberately NOT wired here
 //   - `HttpExceptionFilter` is registered in `main.ts` with `useGlobalFilters`
@@ -24,7 +28,9 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './audit/audit.module';
-import { AuthGuard } from './common/guards/auth.guard';
+import { AuthModule } from './auth/auth.module';
+import { ClockModule } from './common/clock/clock.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { ConfigModule } from './config/config.module';
 import { DepartmentsModule } from './departments/departments.module';
@@ -47,20 +53,24 @@ import { RolesModule } from './roles/roles.module';
     ConfigModule,
     // §4 — Prisma client (@Global, exports PrismaService)
     PrismaModule,
+    // 02 §3 — injectable "now" for expiry / rate-limit rules (@Global, exports ClockService)
+    ClockModule,
     // §6.3 — audit log writer
     AuditModule,
     // §6.4 — BullMQ root connection + `mail` queue + worker
     MailModule,
+    // 02 — login/refresh/logout/me; exports JwtTokenService for the guard below and AuthService for 03/04
+    AuthModule,
     // §7 — reference data
     RolesModule,
     DepartmentsModule,
-    // AC-F2 — GET /health (marked @Public, honoured by AuthGuard)
+    // AC-F2 — GET /health (marked @Public, honoured by JwtAuthGuard)
     HealthModule,
   ],
   providers: [
-    // §7 — authentication first: loads the `x-user-id` user onto `request.user`
-    { provide: APP_GUARD, useClass: AuthGuard },
-    // §7 — then authorisation: compares @Permissions() with `request.user.role.permissions`
+    // 02 §4.1 — authentication first: verifies the bearer JWT and attaches `{ id, role, perms }`
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // 02 §4.2 — then authorisation: compares @Permissions() with `request.user.perms`
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

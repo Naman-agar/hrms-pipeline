@@ -1,16 +1,15 @@
-// TPRD 01 §7 — permission check for routes marked with `@Permissions(...)`.
+// TPRD 01 §7 / 02 §4.2 — permission check for routes marked with `@Permissions(...)`.
 //
-// Runs after the auth guard (`AuthGuard` now; `JwtAuthGuard` once TPRD 02 lands)
-// and compares the handler's required permission strings with the current
-// user's `role.permissions` (Role.permissions String[], §4). The user must hold
-// every required permission; otherwise 403 FORBIDDEN. Routes without
-// `@Permissions()` metadata (e.g. `GET /roles` — "any authenticated") pass
-// straight through, so the guard is a no-op for them.
+// Runs after `JwtAuthGuard` and compares the handler's required permission
+// strings with `req.user.perms` (the JWT claims, 02 §4.1 step 3 — no DB hit).
+// The user must hold every required permission; otherwise 403 FORBIDDEN.
+// Routes without `@Permissions()` metadata (e.g. `GET /roles` — "any
+// authenticated") pass straight through, so the guard is a no-op for them.
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { AppError } from '../errors/app-error';
-import type { RequestWithUser } from './auth.guard';
+import type { RequestWithUser } from './jwt-auth.guard';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -33,8 +32,8 @@ export class PermissionsGuard implements CanActivate {
       throw new AppError(401, 'UNAUTHENTICATED', 'authentication required');
     }
 
-    // §7 — every required permission must be in the user's role.permissions; else 403 FORBIDDEN
-    const granted = new Set(user.role.permissions);
+    // 02 §4.2 step 2 — every required permission must be in req.user.perms; else 403 FORBIDDEN
+    const granted = new Set(user.perms);
     const missing = required.filter((perm) => !granted.has(perm));
     if (missing.length > 0) {
       throw new AppError(403, 'FORBIDDEN', `missing permission: ${missing.join(', ')}`);

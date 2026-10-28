@@ -1,13 +1,14 @@
-// TPRD 01 §2 — `src/common/decorators/current-user.decorator.ts`.
+// TPRD 02 §4.3 — `@CurrentUser()` param decorator returns `req.user`.
 //
-// `@CurrentUser()` hands a controller the user that the auth guard attached to
-// `request.user` (TPRD 01 §7 stub: the User row with `role` and `department`
-// included). Returns `undefined` on a route where no auth guard has run.
+// `req.user` is what `JwtAuthGuard` attached (§4.1 step 3): the JWT claims
+// `{ id, role, perms }` — no DB row. Returns `undefined` on a `@Public()` route
+// where the guard did not run. Load the full user in the service only when the
+// flow needs more (e.g. `departmentId` for manager scoping in 03).
 //
-//   @Get()
-//   list(@CurrentUser() actor: CurrentUserPayload) { … }
+//   @Get('me')
+//   me(@CurrentUser() actor: CurrentUserPayload) { … }
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { CurrentUserPayload, RequestWithUser } from '../guards/auth.guard';
+import type { CurrentUserPayload, RequestWithUser } from '../guards/jwt-auth.guard';
 
 export const CurrentUser = createParamDecorator(
   (_data: unknown, context: ExecutionContext): CurrentUserPayload | undefined => {
