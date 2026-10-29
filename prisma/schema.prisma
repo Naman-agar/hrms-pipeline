@@ -2,7 +2,11 @@
 // produced only in *.mapper.ts files.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // TPRD 03 §4.4 / AC-U11 (docs/decisions.md): lets `relationLoadStrategy: 'join'`
+  // compile `include: { role, department }` into one joined SELECT instead of
+  // one SELECT per relation, so `GET /users` is exactly 2 statements.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

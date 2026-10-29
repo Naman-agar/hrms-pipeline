@@ -2,7 +2,8 @@
 //
 // Query schema for list endpoints (03 §3, 04), the Prisma `skip`/`take` derivation and the
 // `{ data, meta }` response helper. Query params arrive as strings, so both fields are coerced;
-// `page_size` is restricted to the closed set 10|25|50|100 (a limit, not a suggestion).
+// `page_size` is restricted to the closed set 1|10|25|50|100 (a limit, not a suggestion).
+// `1` was added per docs/decisions.md (TPRD 03 §13 AC-U5).
 //
 // Usage in a service:
 //   const { skip, take } = toSkipTake(query);
@@ -15,7 +16,7 @@
 import { z } from 'zod';
 
 /** Allowed `page_size` values (TPRD 01 §6.2). */
-export const PAGE_SIZES = [10, 25, 50, 100] as const;
+export const PAGE_SIZES = [1, 10, 25, 50, 100] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
 
 export const PaginationSchema = z.object({
@@ -23,7 +24,7 @@ export const PaginationSchema = z.object({
   page_size: z.coerce
     .number()
     .int()
-    .pipe(z.union([z.literal(10), z.literal(25), z.literal(50), z.literal(100)]))
+    .pipe(z.union([z.literal(1), z.literal(10), z.literal(25), z.literal(50), z.literal(100)]))
     .default(25),
 });
 

@@ -6,7 +6,7 @@ This repository is the backend for the HRMS User-management screen. It is built 
 | --- | --- | --- |
 | 01 | docs/tprd/01-foundation.md | done |
 | 02 | docs/tprd/02-authentication.md | done |
-| 03 | docs/tprd/03-user-management.md | pending |
+| 03 | docs/tprd/03-user-management.md | done |
 | 04 | docs/tprd/04-user-invite.md | pending |
 
 Update the Status column (`pending` → `in progress` → `done`) as `/build-feature` completes each one.

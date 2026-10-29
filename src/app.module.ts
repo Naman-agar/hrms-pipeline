@@ -38,6 +38,7 @@ import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RolesModule } from './roles/roles.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -64,6 +65,8 @@ import { RolesModule } from './roles/roles.module';
     // §7 — reference data
     RolesModule,
     DepartmentsModule,
+    // 03 — /users list + CRUD, PATCH /me
+    UsersModule,
     // AC-F2 — GET /health (marked @Public, honoured by JwtAuthGuard)
     HealthModule,
   ],
